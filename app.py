@@ -1,8 +1,6 @@
 import boto3
 import os
 import pdfkit
-
-from chalice import Chalice
 from datetime import datetime
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
@@ -22,7 +20,7 @@ env = Environment(
 binary_path = here('wkhtmltopdf')
 configuration = pdfkit.configuration(wkhtmltopdf=binary_path)
 
-app = Chalice(app_name='pdf')
+
 
 AWS_ACCESS_KEY = os.getenv('AWS_ACCESS')
 AWS_SECRET_KEY = os.getenv('AWS_SECRET')
