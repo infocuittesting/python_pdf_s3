@@ -1,77 +1,95 @@
-from flask import *
-import pdfkit, os, uuid
+import boto3
+import os
+import pdfkit
 
+from chalice import Chalice
+from datetime import datetime
+from jinja2 import Environment, FileSystemLoader, select_autoescape
+
+from flask import Flask,request
 app = Flask(__name__)
+@app.route("/getting_pdf",methods=['POST'])
 
-Download_PATH = 'wkhtmltopdf/bin/wkhtmltopdf.exe'
-APP_ROOT = os.path.dirname(os.path.abspath(__file__))
-Download_FOLDER = os.path.join(APP_ROOT, Download_PATH)
+BASE_DIR = os.path.dirname(os.path.realpath(__file__))
+here = lambda *x: os.path.abspath(os.path.join(BASE_DIR, *x))
 
-
-@app.route('/')
-@app.route('/index')
-def index():
-    return render_template("index.html")
-
-
-@app.route("/api/wkhtmltopdf_url", methods=['POST'])
-def wkhtmltopdfurl():
-    url = request.form['URL']
-    try:
-        filename = str(uuid.uuid4()) + '.pdf'
-        config = pdfkit.configuration(wkhtmltopdf=Download_FOLDER)
-        pdfkit.from_url(url, filename, configuration=config)
-        pdfDownload = open(filename, 'rb').read()
-        os.remove(filename)
-        return Response(
-            pdfDownload,
-            mimetype="application/pdf",
-            headers={
-                "Content-disposition": "attachment; filename=" + filename,
-                "Content-type": "application/force-download"
-            }
-        )
-    except ValueError:
-        print("Oops! ")
+env = Environment(
+    loader=FileSystemLoader(here('templates')),
+    autoescape=select_autoescape(['html'])
+)
 
 
-@app.route("/api/wkhtmltopdf_template", methods=['POST'])
-def wkhtmltopdf_template():
-    filename = str(uuid.uuid4()) + '.pdf'
-    config = pdfkit.configuration(wkhtmltopdf=Download_FOLDER)
-    body = '''
-    <p style="text-align:center;font-size:large;">明 細 表</p>
-    <hr>
-    <p style="margin-top: 15px;margin-bottom: 15px;margin-left: 150px; font-size:large;">訂單編號 :  {} </p>
-    <p style="margin-top: 15px;margin-bottom: 15px;margin-left: 150px; font-size:large;">交易方式 :  {}  </p>
-    <p style="margin-top: 15px;margin-bottom: 15px;margin-left: 150px; font-size:large;">交易帳號 :  {}  </p>
-    <hr>
-    <p style="margin-top: 15px;margin-bottom: 15px;margin-left: 150px; font-size:large;">姓名 :  {}  </p>
-    <p style="margin-top: 15px;margin-bottom: 15px;margin-left: 150px; font-size:large;">身分證字號 :  {} </p>
-    <img style="position: fixed;bottom: 50px;right: 0; height:50%; width:auto;" src="http://i.imgur.com/uLhrB27.jpg" alt="新垣結衣" title="新垣結衣">
-            '''.format(
-        "123456789",
-        "信用卡",
-        "xxxxxxx1111111",
-        "twtrubiks",
-        "A000000000"
-    )
-    options = {
-        'encoding': 'UTF-8'
+binary_path = here('wkhtmltopdf')
+configuration = pdfkit.configuration(wkhtmltopdf=binary_path)
+
+app = Chalice(app_name='pdf')
+
+AWS_ACCESS_KEY = os.getenv('AWS_ACCESS')
+AWS_SECRET_KEY = os.getenv('AWS_SECRET')
+AWS_S3_BUCKET = os.getenv('AWS_BUCKET')
+AWS_REGION_NAME = os.getenv('AWS_REGION_NAME')
+
+
+client = boto3.client(
+    's3',
+    region_name=AWS_REGION_NAME,
+    aws_access_key_id=AWS_ACCESS_KEY,
+    aws_secret_access_key=AWS_SECRET_KEY)
+
+
+def release_id():
+    return datetime.now().strftime('%Y%m%d-%H%M%S')
+
+
+def upload_to_s3(file_object, key_name):
+    result = client.put_object(
+        Bucket=AWS_S3_BUCKET, Key=key_name, Body=file_object)
+    return result
+
+
+def get_s3_url(key_name):
+    url = client.generate_presigned_url(
+        ClientMethod='get_object',
+        Params={
+            'Bucket': AWS_S3_BUCKET,
+            'Key': key_name,
+        })
+    return url
+
+
+def render_template(file_name, context):
+    template = env.get_template(file_name)
+    return template.render(**context)
+
+
+def render_pdf(params):
+    name = params.get('name', 'Someone')
+    contents = render_template('base.html', {
+        'name': name,
+    })
+    pdf_file = pdfkit.from_string(contents, False, configuration=configuration)
+    key_name = '%s.pdf' % release_id()
+    result = upload_to_s3(pdf_file, key_name)
+    print(result)
+    return {
+        'key': key_name,
+        'url': get_s3_url(key_name),
     }
-    pdfkit.from_string(body, filename, configuration=config, options=options)
-    pdfDownload = open(filename, 'rb').read()
-    os.remove(filename)
-    return Response(
-        pdfDownload,
-        mimetype="application/pdf",
-        headers={
-            "Content-disposition": "attachment; filename=" + filename,
-            "Content-type": "application/force-download"
+
+
+# @app.route('/')
+def index():
+    params = app.current_request.query_params
+    if params is None or 'name' not in params:
+        return {
+            'error': 'Missing param `name`',
         }
-    )
-    return render_template('index.html')
+    try:
+        return render_pdf(params)
+    except Exception as e:
+        return {
+            'error': str(e),
+        }
 
-
-if __name__ == '__main__':
-    app.run(debug='True')
+if __name__ == "__main__":
+  app.run(debug=True)
