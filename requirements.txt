@@ -9,4 +9,4 @@ Jinja2==2.9.6
 boto3==1.4.7
 requests
 psycopg2==2.7.3.2
-
+wkhtmltopdf-pack==0.12.3.
