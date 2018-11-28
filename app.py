@@ -1,46 +1,81 @@
-from flask import *
-import pdfkit, os, uuid
+import requests
+import json
+import datetime
+from dateutil import parser
+from sqlwrapper import gensql,dbget
+import sys
+import pdfkit
+from flask import Flask,request
 
 app = Flask(__name__)
+@app.route("/getting_pdf",methods=['POST'])
 
-Download_PATH = 'wkhtmltopdf/bin/wkhtmltopdf.exe'
-APP_ROOT = os.path.dirname(os.path.abspath(__file__))
-Download_FOLDER = os.path.join(APP_ROOT, Download_PATH)
+def sendemailwhatsapp():
+     #print(name,email,type(email),message,conf_no,arrival,depature, room_type)
+     sys.stdout.flush()
+     e = request.json
+     print(e)
+     email = []
+     Hotel_name = 'Kconnect24/7'
+     tfn = request.json['TFN']
+     con_no = request.json['customer_confirmation_number']
+     print(con_no,type(con_no))    
+     b_id = json.loads(dbget("select id from ivr_dialed_number where dialed_number='"+tfn+"' "))
+     #print(b_id)
+     bi_id = json.loads(dbget("select business_id from ivr_hotel_list where id='"+str(b_id[0]['id'])+"' "))
+     print(bi_id[0]['business_id'],type(bi_id[0]['business_id']))
 
+     rate_day = json.loads(dbget("select * from customer_rate_detail where \
+                          business_id='"+str(bi_id[0]['business_id'])+"' and customer_confirmation_number='"+con_no+"' "))
+     print("rate_day",rate_day)
+     
+     d = json.loads(dbget("SELECT ivr_room_customer_booked.*,ivr_hotel_list.* FROM public.ivr_room_customer_booked \
+                           join ivr_hotel_list on \
+                           ivr_room_customer_booked.business_id = ivr_hotel_list.business_id\
+                           where ivr_room_customer_booked.business_id='"+str(bi_id[0]['business_id'])+"' \
+                           and ivr_room_customer_booked.customer_confirmation_number='"+str(con_no)+"' "))
+     print("d",d)
+     #print(d[0]['customer_amount'],type(d[0]['customer_amount']))
+     #email = ['infocuit.santhakumar@gmail.com','infocuit.raja@gmail.com']
+     
+     email.append(d[0]['email'])
+     email.append(d[0]['customer_email'])
+     print(email)
+     on = d[0]['booked_date']
+     print(on[:11], type(on[:11]))
+     booked_on = parser.parse(on[:11]).date().strftime('%Y-%m-%d')
+     sender = "infocuit.testing@gmail.com"
+     
+     t_body = """
+                       <tr style="border:1px solid gray">
+                         <th align="left">Date</th>
+                         <th align="left">Price Per Night in $</th>
+                       </tr>
 
-@app.route('/')
-@app.route('/index')
-def index():
-    return render_template("index.html")
+             """
 
+     for rate in rate_day:
+         print(rate)
+         t_body += """
+                       <tr style="border:1px solid gray">
+                         <td>"""+rate['rate_date']+"""</td>
+                         <td align="left">"""+str(rate['amount'])+"""</td>
+                       </tr>
+                   """
+     t_body += """
+                       <tr style="border:1px solid gray">
+                         <td><b>Total</b></td>
+                         <td align="left">"""+str(d[0]['customer_amount'])+"""</td>
+                       </tr>
+              """
+     print("t_body-----------------------")
+     print(t_body)
+     
+     for receiver in email:
+          
 
-@app.route("/api/wkhtmltopdf_url", methods=['POST'])
-def wkhtmltopdfurl():
-    url = request.form['URL']
-    try:
-        filename = str(uuid.uuid4()) + '.pdf'
-        config = pdfkit.configuration(wkhtmltopdf=Download_FOLDER)
-        pdfkit.from_url(url, filename, configuration=config)
-        pdfDownload = open(filename, 'rb').read()
-        os.remove(filename)
-        return Response(
-            pdfDownload,
-            mimetype="application/pdf",
-            headers={
-                "Content-disposition": "attachment; filename=" + filename,
-                "Content-type": "application/force-download"
-            }
-        )
-    except ValueError:
-        print("Oops! ")
-
-
-@app.route("/api/wkhtmltopdf_template", methods=['POST'])
-def wkhtmltopdf_template():
-    filename = str(uuid.uuid4()) + '.pdf'
-    config = pdfkit.configuration(wkhtmltopdf=Download_FOLDER)
-    body = '''
-    <!DOCTYPE html>
+          html = """\
+<!DOCTYPE html>
 <html>
 <head>
 <meta charset="UTF-8">
@@ -164,23 +199,14 @@ def wkhtmltopdf_template():
 </body>
 
 </html>
-     '''
-    options = {
-        'encoding': 'UTF-8'
-    }
-    pdfkit.from_string(body, filename, configuration=config, options=options)
-    pdfDownload = open(filename, 'rb').read()
-    os.remove(filename)
-    return Response(
-        pdfDownload,
-        mimetype="application/pdf",
-        headers={
-            "Content-disposition": "attachment; filename=" + filename,
-            "Content-type": "application/force-download"
-        }
-    )
-    return render_template('index.html')
-
-
+          """
+          path_wkthmltopdf = r'wkhtmltopdf/bin/wkhtmltopdf.exe'
+          config = pdfkit.configuration(wkhtmltopdf=path_wkthmltopdf)
+          s = pdfkit.from_string(html,'pdf_folder/test_PDFKIT.pdf',configuration=config)
+          print("test ",s)
+          print("test ",type(s))
+    
+          return(json.dumps({'Return': 'Message Send Successfully',"Return_Code":"MSS","Status": "Success","Status_Code": "200"}, sort_keys=True, indent=4))
+    
 if __name__ == '__main__':
     app.run(debug='True')
