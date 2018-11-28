@@ -8,6 +8,10 @@ import pdfkit
 from flask import Flask,request
 
 app = Flask(__name__)
+@app.route("/",methods=['GET'])
+def test():
+	return ("hello world")
+
 @app.route("/getting_pdf",methods=['POST'])
 
 def sendemailwhatsapp():
