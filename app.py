@@ -204,8 +204,11 @@ def sendemailwhatsapp():
 
 </html>
           """
-          path_wkthmltopdf = r'wkhtmltopdf/bin/wkhtmltopdf.exe'
-          config = pdfkit.configuration(wkhtmltopdf=path_wkthmltopdf)
+          WKHTMLTOPDF_CMD = subprocess.Popen(
+          ['which', os.environ.get('WKHTMLTOPDF_BINARY', 'wkhtmltopdf-pack')], # Note we default to 'wkhtmltopdf' as the binary name
+          stdout=subprocess.PIPE).communicate()[0].strip()
+	  #path_wkthmltopdf = r'wkhtmltopdf/bin/wkhtmltopdf.exe'
+          config = pdfkit.configuration(wkhtmltopdf=WKHTMLTOPDF_CMD)
           s = pdfkit.from_string(html,'pdf_folder/test_PDFKIT.pdf',configuration=config)
           print("test ",s)
           print("test ",type(s))
