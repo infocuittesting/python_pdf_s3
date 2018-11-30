@@ -174,7 +174,7 @@ def sendemailwhatsapp():
                 
                 <p style="line-height:0.7;padding-top:10px;">Room Options</p>
                
-               <p style="float:left">   <img src="https://www.riversidehotel.com.au/wp-content/uploads/2016/01/RH-12.jpg" alt="" width="400px" height="250px"> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+               <p style="float:left"> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
                <span style="float:left;"> <table style=" border:1px solid gray; width:400px;height:250px">
                      <tbody style="border:1px solid gray">
                      """+t_body+"""
